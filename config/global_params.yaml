@@ -1,0 +1,15 @@
+############## Rviz ##############
+quit_simulation_topic: "quit_simulation"
+############## Sensors ##############
+geo_projection: "+proj=tmerc +lat_0=40.354550084445 +lon_0=-3.7463664011244586 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +geoidgrids=egm96_15.gtx +vunits=m +no_defs"
+ground_truth_topic: "ground_truth"
+infrastructure_gps_topic: "gps/fix"
+############## Map ##############
+hd_map: "Town10HD_Opt"
+
+# Tf transformation tree frames
+map_frame: "map"
+
+# /**: will set the parameter string_param on all nodes,
+# /**/some_node: will set the parameter string_param on nodes named some_node in any namespace,
+# /foo/*: will set the parameter string_param on any node in the namespace /foo.
