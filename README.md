@@ -15,10 +15,10 @@ Every sensor class that can be instantiated to deploy in simulation is inside th
 1. **GNSS**: Produces [NavSatFix](https://docs.ros2.org/latest/api/sensor_msgs/msg/NavSatFix.html) ROS Messages.
 2. **IMU**: Produces [IMU](https://docs.ros2.org/foxy/api/sensor_msgs/msg/Imu.html) ROS messages.
 3. **LiDAR (Raycast)**: Produces [PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.
-4. **Radar**: Produces PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.
+4. **Radar**: Produces [PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.
 5. **RGB Camera**: Produces [Image](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/Image.html) ROS messages or [CompressedImage](https://docs.ros2.org/galactic/api/sensor_msgs/msg/CompressedImage.html) if image transport is active.
 6. **Semantic Camera**:  Produces [Image](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/Image.html) ROS messages or [CompressedImage](https://docs.ros2.org/galactic/api/sensor_msgs/msg/CompressedImage.html) if image transport is active.
-7. **Semantic LiDAR**: Produces PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.
+7. **Semantic LiDAR**: Produces [PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.
 
 # ROS-Carla Client Node
 The Node-Client is composed of three items: the World, the Traffic Manager, and the actual ROS Bridge.
@@ -37,7 +37,7 @@ In the **_config_** folder the configuration files for the package can be found.
 
 # Utilities
 The package contains several tools:
-1. **camera_pose.py**: Spawns A pygame window to extract the position of the spectator camera inside the Carla server. The camera can be moved with WASD.
+1. **camera_pose.py**: Spawns a pygame window to extract the position of the spectator camera inside the Carla server. The camera can be moved with WASD.
 2. **image_transport_node.cpp**: Images produces by Carla sensors are RAW and uncompressed. In order to deal with a huge number of images, this node just compress all image readings.
 
 # Usage
