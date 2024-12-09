@@ -346,7 +346,7 @@ class InfrastructureROSBridge(object):
     self._executor = rclpy.executors.SingleThreadedExecutor()
     self._executor.add_node(self._carla_node)
 
-  def tick(self, clock):
+  def tick(self):
     """Calback for every Carla World tick."""
     self._executor.spin_once()
 

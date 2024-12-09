@@ -112,6 +112,21 @@ class InfrastructureWorld(object):
 
       detection_msg.detections.append(detection)
 
+  def get_traffic_lights(self, tl_list, actor, max_distance=50):
+    """Return as a Light msg the set of nearest traffic lights within a distance
+       from the actor."""
+    traffic_lights = self.map.get_all_landmarks_of_type('1000001')
+    t = actor.get_transform()
+
+    distance = lambda l: np.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
+    traffic_lights = [(distance(x.transform.location), x) for x in traffic_lights]
+    for d, traffic_light_landmark in sorted(traffic_lights, key=lambda traffic_lights: traffic_lights[0]):
+      if d > max_distance:
+        break
+
+      traffic_light = self.world.get_traffic_light(traffic_light_landmark)
+      tl_list.append(traffic_light)
+
   def destroy(self):
     """Once the simulation finish destroy every object spawned."""
     # Destroy all world items

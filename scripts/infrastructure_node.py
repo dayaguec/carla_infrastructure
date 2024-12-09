@@ -16,7 +16,8 @@ import rclpy
 
 from infrastructure_carla.infrastructure_ros_bridge import InfrastructureROSBridge
 from infrastructure_carla.infrastructure_world import InfrastructureWorld
-from infrastructure_carla.carla_traffic_manager import CarlaTrafficManager
+from infrastructure_carla.management.carla_traffic_manager import CarlaTrafficManager
+from infrastructure_carla.management.traffic_light_manager import TrafficLightManager
 from infrastructure_carla.utils import get_actor_blueprints
 
 # ==============================================================================
@@ -32,6 +33,7 @@ def game_loop(args):
   original_settings = None
   sim_world = None
   traffic_manager = None
+  traffic_light_manager = None
   sync_opt = False
 
   try:
@@ -70,6 +72,7 @@ def game_loop(args):
     ros_bridge = InfrastructureROSBridge(world)
     traffic_manager = CarlaTrafficManager(client=client, tm_port=args.tm_port,
       sync=sync_opt, safe=True, hybrid=False)
+    traffic_light_manager = TrafficLightManager(world)
 
     if args.sync:
       sim_world.tick()
@@ -85,7 +88,8 @@ def game_loop(args):
       if args.sync:
         sim_world.tick()
       clock.tick_busy_loop(60)
-      ros_bridge.tick(clock)
+      ros_bridge.tick()
+      traffic_light_manager.update_control_loop()
       loop_flag = ros_bridge.is_game_quit()
   finally:
     if original_settings:

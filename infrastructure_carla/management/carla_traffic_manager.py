@@ -1,7 +1,7 @@
 import carla
 from carla import VehicleLightState
 
-from .utils import get_actor_blueprints
+from infrastructure_carla.utils import get_actor_blueprints
 
 import random
 import time
