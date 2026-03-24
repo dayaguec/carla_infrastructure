@@ -36,7 +36,7 @@ def generate_launch_description():
       IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
           PathJoinSubstitution([
-            FindPackageShare('infrastructure_launch'), 'launch/simulation', 'carla_infrastructure.launch.py'
+            FindPackageShare('carla_infrastructure'), 'launch', 'carla_infrastructure.launch.py'
             ])
           ]),
           launch_arguments = {
