@@ -1,183 +1,172 @@
 import carla
-from carla import VehicleLightState
-
-from infrastructure_carla.utils import get_actor_blueprints
-
 import random
-import time
 import rclpy
 
 class CarlaTrafficManager(object):
-  def __init__(self, client, tm_port='8000', sync=False, safe=True, hybrid=True,
-               filterv='vehicle.*', generationv='All', filterw='walker.pedestrian.*',
-               generationw='2'):
-    self._client = client
-    self._traffic_manager = self._client.get_trafficmanager(tm_port)
-    self._traffic_manager.set_global_distance_to_leading_vehicle(2.5)
-    self._synchronous_master = False
-
-    self._vehicles_list = []
-    self._walker_list = []
-    self._all_id = []
-    self._all_actors = []
-    self._tf_clean = True
-
-    if sync:
-      self._synchronous_master = True
-      self._traffic_manager.set_synchronous_mode(True)
-
-    if hybrid:
-      self._traffic_manager.set_hybrid_physics_mode(True)
-      self._traffic_manager.set_hybrid_physics_radius(50.0)
-
-    self._world = self._client.get_world()
-
-    self._blueprints = get_actor_blueprints(self._world, filterv, generationv)
-    self._blueprints_walkers = get_actor_blueprints(self._world, filterw, generationw)
-
-    if safe:
-      self._blueprints = [x for x in self._blueprints if x.get_attribute('base_type') == 'car']
-
-    self._blueprints = sorted(self._blueprints, key=lambda bp: bp.id)
-
-  def is_traffic_manager_clean(self):
-    return self._tf_clean
-
-  def generate_traffic(self, n_vehicles=10, n_walkers=0, seed=None, seedw=None):
+  def __init__(self, client, tm_port=8000):
+    self.client = client
+    self.world = self.client.get_world()
+    self.traffic_manager = self.client.get_trafficmanager(tm_port)
+    self.tm_port = tm_port
     
-    random.seed(seed if seed is not None else int(time.time()))
+    # State tracking for cleanup
+    self.vehicles_list = []
+    self.walkers_list = []
+    self.all_id = []
+    
+    # Configuration
+    self.num_vehicles = 0
+    self.num_walkers = 0
+    self.hybrid_physics = False
 
-    spawn_points = self._world.get_map().get_spawn_points()
-    number_of_spawn_points = len(spawn_points)
+    self.synchronous_mode = self.world.get_settings().synchronous_mode
 
-    if n_vehicles < number_of_spawn_points:
-      random.shuffle(spawn_points)
-    elif n_vehicles > number_of_spawn_points:
-      rclpy.logging.get_logger('traffic_manager').info(
-        "Requested {} vehicles, but could only find {} spawn points".format(
-          n_vehicles, number_of_spawn_points))
-      n_vehicles = number_of_spawn_points
+    self.tf_clean = True
+
+  def setup_parameters(self, num_vehicles, num_walkers,
+    seed=None, hybrid_physics=False, hybrid_radius=50.0):
+    """Configures traffic generation parameters and TM settings."""
+    self.num_vehicles = num_vehicles
+    self.num_walkers = num_walkers
+    self.hybrid_physics = hybrid_physics
+    
+    # Set seeds for deterministic generation if provided
+    if seed is not None:
+      self.traffic_manager.set_random_device_seed(seed)
+
+    # Configure Hybrid Physics
+    if self.hybrid_physics:
+      self.traffic_manager.set_hybrid_physics_mode(True)
+      self.traffic_manager.set_hybrid_physics_radius(hybrid_radius)
+    else:
+      self.traffic_manager.set_hybrid_physics_mode(False)
+
+    # General TM settings
+    self.traffic_manager.set_global_distance_to_leading_vehicle(2.5)
+    self.traffic_manager.global_percentage_speed_difference(30.0)
+    if self.synchronous_mode:
+      self.traffic_manager.set_synchronous_mode(True)
+
+  def spawn_traffic(self):
+    if not self.tf_clean:
+      return False, "Traffic Manager is not clean, clean it first before spawning new actors!"
+
+    """Spawns vehicles and walkers based on current parameters."""
+    blueprints = self.world.get_blueprint_library()
+
+    # 1. Spawn Vehicles (force safe)
+    vehicle_bps = blueprints.filter('vehicle.*')
+    vehicle_bps = [bp for bp in vehicle_bps if bp.get_attribute('base_type') == 'car']
+    spawn_points = self.world.get_map().get_spawn_points()
+
+    max_spawn_points = len(spawn_points)
+    if self.num_vehicles > max_spawn_points:
+      actual_num_vehicles = max_spawn_points
+    else:
+      actual_num_vehicles = self.num_vehicles
+
+    random.shuffle(spawn_points)
+    
+    SpawnActor = carla.command.SpawnActor
+    SetAutopilot = carla.command.SetAutopilot
+    FutureActor = carla.command.FutureActor
 
     batch = []
-    for n, transform in enumerate(spawn_points):
-      if n >= n_vehicles:
-        break
-      blueprint = random.choice(self._blueprints)
+    for i, transform in enumerate(spawn_points[:actual_num_vehicles]):
+      blueprint = random.choice(vehicle_bps)
+      
+      # If hybrid physics is enabled, we need a "hero" vehicle for the radius calculation
+      if self.hybrid_physics and i == 0:
+        blueprint.set_attribute('role_name', 'hero')
+      else:
+        blueprint.set_attribute('role_name', 'autopilot')
+
       if blueprint.has_attribute('color'):
         color = random.choice(blueprint.get_attribute('color').recommended_values)
         blueprint.set_attribute('color', color)
-      if blueprint.has_attribute('driver_id'):
-        driver_id = random.choice(blueprint.get_attribute('driver_id').recommended_values)
-        blueprint.set_attribute('driver_id', driver_id)
 
-      blueprint.set_attribute('role_name', 'autopilot')
+      # Spawn and hand over to Traffic Manager
+      batch.append(SpawnActor(blueprint, transform)
+                   .then(SetAutopilot(FutureActor, True, self.tm_port)))
 
-      # prepare the light state of the cars to spawn
-      light_state = VehicleLightState.Position | VehicleLightState.LowBeam | VehicleLightState.LowBeam
-
-      # spawn the cars and set their autopilot and light state all together
-      batch.append(carla.command.SpawnActor(blueprint, transform)
-        .then(carla.command.SetAutopilot(carla.command.FutureActor, True, self._traffic_manager.get_port()))
-        .then(carla.command.SetVehicleLightState(carla.command.FutureActor, light_state)))
-
-    # Example of how to use Traffic Manager parameters
-    self._traffic_manager.global_percentage_speed_difference(30.0)
-
-    for response in self._client.apply_batch_sync(batch, self._synchronous_master):
+    # Execute vehicle batch
+    for response in self.client.apply_batch_sync(batch, self.synchronous_mode):
       if response.error:
-        rclpy.logging.get_logger('traffic_manager').info(response.error)
+        logging.error(response.error)
       else:
-        self._vehicles_list.append(response.actor_id)
+        self.vehicles_list.append(response.actor_id)
 
-    # -------------
-    # Spawn Walkers
-    # -------------
-    # some settings
-    percentagePedestriansRunning = 0.0      # how many pedestrians will run
-    percentagePedestriansCrossing = 0.0     # how many pedestrians will walk through the road
-    if seedw is not None:
-      self._world.set_pedestrians_seed(seedw)
-      random.seed(seedw)
-    # 1. Take all the random locations to spawn
-    spawn_points = []
-    for i in range(n_walkers):
+    # 2. Spawn Walkers @todo: Adjust perceptage of speed/crosswalk/use_wheelchair
+    walker_bps = blueprints.filter('walker.pedestrian.*')
+    walker_controller_bp = blueprints.find('controller.ai.walker')
+    
+    batch = []
+    walker_locs = []
+    for _ in range(self.num_walkers):
       spawn_point = carla.Transform()
-      loc = self._world.get_random_location_from_navigation()
-      if (loc is not None):
+      loc = self.world.get_random_location_from_navigation()
+      if loc:
         spawn_point.location = loc
-        spawn_points.append(spawn_point)
-    # 2. Spawn the walker object
-    batch = []
-    walker_speed = []
-    for spawn_point in spawn_points:
-      walker_bp = random.choice(self._blueprints_walkers)
-      if walker_bp.has_attribute('is_invincible'):
-        walker_bp.set_attribute('is_invincible', 'false')
-      if walker_bp.has_attribute('speed'):
-        if (random.random() > percentagePedestriansRunning):
-          walker_speed.append(walker_bp.get_attribute('speed').recommended_values[1])
-        else:
-          walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])
-      else:
-        walker_speed.append(0.0)
-      batch.append(carla.command.SpawnActor(walker_bp, spawn_point))
-    results = self._client.apply_batch_sync(batch, self._synchronous_master)
-    walker_speed2 = []
-    for i in range(len(results)):
-      if results[i].error:
-        rclpy.logging.get_logger('traffic_manager').info(results[i].error)
-      else:
-        self._walker_list.append({"id": results[i].actor_id})
-        walker_speed2.append(walker_speed[i])
-    walker_speed = walker_speed2
-    # 3. Spawn the walker controller
-    batch = []
-    walker_controller_bp = self._world.get_blueprint_library().find('controller.ai.walker')
-    for i in range(len(self._walker_list)):
-      batch.append(carla.command.SpawnActor(
-        walker_controller_bp, carla.Transform(), self._walker_list[i]["id"]))
-    results = self._client.apply_batch_sync(batch, self._synchronous_master)
-    for i in range(len(results)):
-      if results[i].error:
-        rclpy.logging.get_logger('traffic_manager').info(results[i].error)
-      else:
-        self._walker_list[i]["con"] = results[i].actor_id
-    # 4. Put together the walkers and controllers id to get the objects from their id
-    for i in range(len(self._walker_list)):
-       self._all_id.append(self._walker_list[i]["con"])
-       self._all_id.append(self._walker_list[i]["id"])
-    self._all_actors = self._world.get_actors(self._all_id)
+        walker_locs.append(spawn_point)
+        batch.append(SpawnActor(random.choice(walker_bps), spawn_point))
 
-    # Wait for a tick to ensure client receives the last transform
-    # of the walkers we have just created
-    if not self._synchronous_master:
-      self._world.wait_for_tick()
+    # Execute walker batch
+    walker_ids = []
+    for response in self.client.apply_batch_sync(batch, self.synchronous_mode):
+      if not response.error:
+        walker_ids.append(response.actor_id)
+
+    # 3. Spawn Walker Controllers
+    batch = []
+    for walker_id in walker_ids:
+      batch.append(SpawnActor(walker_controller_bp, carla.Transform(), walker_id))
+        
+    controller_ids = []
+    for response in self.client.apply_batch_sync(batch, self.synchronous_mode):
+      if not response.error:
+        controller_ids.append(response.actor_id)
+
+    self.walkers_list.extend(walker_ids)
+    self.walkers_list.extend(controller_ids)
+    self.all_id = self.vehicles_list + self.walkers_list
+
+    # 4. Initialize Walker AI (Requires a world tick first!)
+    if self.synchronous_mode:
+      self.world.tick()
     else:
-      self._world.tick()
+      self.world.wait_for_tick()
 
-    # 5. Initialize each controller and set target to walk to
-    #    (list is [controler, actor, controller, actor ...])
-    #    set how many pedestrians can cross the road
-    self._world.set_pedestrians_cross_factor(percentagePedestriansCrossing)
-    for i in range(0, len(self._all_id), 2):
-      self._all_actors[i].start()
-      self._all_actors[i].go_to_location(self._world.get_random_location_from_navigation())
-      self._all_actors[i].set_max_speed(float(walker_speed[int(i/2)]))
+    # Start the controllers and give them a random target
+    world_actors = self.world.get_actors()
+    controllers = world_actors.filter('controller.ai.walker')
+    for controller in controllers:
+      controller.start()
+      controller.go_to_location(self.world.get_random_location_from_navigation())
+      controller.set_max_speed(1 + random.random()) # Random speed
 
-    self._tf_clean = False
+    self.tf_clean = False
+
+    return True, 'Spawned {} vehicles and {} walkers.'.format(len(self.vehicles_list), len(walker_ids))
 
   def clean_traffic(self):
-    if not self._tf_clean:
-      self._client.apply_batch([carla.command.DestroyActor(x) for x in self._vehicles_list])
+    """Destroys all spawned actors to clean the simulation."""
+    if self.tf_clean:
+      return False, 'Traffic Manager is already clean...'
 
-      # Stop walker controllers (list is [controller, actor, controller, actor ...])
-      for i in range(0, len(self._all_id), 2):
-        self._all_actors[i].stop()
+    # Stop walker controllers first
+    controllers = self.world.get_actors().filter('controller.ai.walker')
+    for controller in controllers:
+      controller.stop()
 
-      self._client.apply_batch([carla.command.DestroyActor(x) for x in self._all_id])
-      
-      self._vehicles_list = []
-      self._walker_list = []
-      self._all_id = []
-      self._all_actors = []
-      self._tf_clean = True
+    # Batch destroy to prevent simulation hang
+    batch = [carla.command.DestroyActor(x) for x in self.all_id]
+    
+    self.client.apply_batch_sync(batch, self.synchronous_mode)
+    
+    self.vehicles_list.clear()
+    self.walkers_list.clear()
+    self.all_id.clear()
+
+    self.tf_clean = True
+    
+    return True, 'Traffic successfully cleaned.'

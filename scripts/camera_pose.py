@@ -82,9 +82,12 @@ def game_loop(args):
       carla_location = spectator_transform.location
       carla_rotation = spectator_transform.rotation
 
+      carla_location_geo = world.get_map().transform_to_geolocation(carla_location)
+
       # Pose to string conversion
       actor_pose_loc = '(x: ' + "{:.3f}".format(carla_location.x) + ' y: ' + "{:.3f}".format(carla_location.y) + ' z: ' + "{:.3f}".format(carla_location.z) + ')'
       actor_pose_rot = '(yaw: ' + "{:.3f}".format(carla_rotation.yaw) + ' pitch: '+ "{:.3f}".format(carla_rotation.pitch) + ' roll: ' + "{:.3f}".format(carla_rotation.roll) + ')'
+      actor_pose_loc_geo = '(lat: ' + "{:.8f}".format(carla_location_geo.latitude) + ' lon: '+ "{:.8f}".format(carla_location_geo.longitude) + ' alt: ' + "{:.8f}".format(carla_location_geo.altitude) + ')'
 
       # Clear Pygame surface
       display.fill((0,0,0))
@@ -92,15 +95,19 @@ def game_loop(args):
       # Display Location and Orientation on Pygame surface
       text_loc = font_mono.render(actor_pose_loc, True, (0, 255, 0), (0, 0, 150))
       text_rot = font_mono.render(actor_pose_rot, True, (0, 255, 0), (0, 0, 150))
+      text_geo = font_mono.render(actor_pose_loc_geo, True, (0, 255, 0), (0, 0, 150))
       coords_loc = text_loc.get_rect(center = (args.width / 2, args.height / 2))
       coords_rot = text_rot.get_rect(center = (args.width / 2 + 10, args.height / 2 + 50))
+      coords_geo = text_geo.get_rect(center = (args.width / 2 + 20, args.height / 2 + 100))
       display.blit(text_loc, coords_loc)
       display.blit(text_rot, coords_rot)
+      display.blit(text_geo, coords_geo)
       pygame.display.flip()
 
       # Print on Terminal for easy copy...
       print(actor_pose_loc)
       print(actor_pose_rot)
+      print(actor_pose_loc_geo)
 
       # Parse PyGame keyboard events
       for event in pygame.event.get():

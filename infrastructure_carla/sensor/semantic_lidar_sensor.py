@@ -47,6 +47,10 @@ class SemanticLidarSensor(object):
     self.sensor.listen(
         lambda lidar_data: SemanticLidarSensor._Lidar_callback(weak_self, lidar_data))
 
+  def destroy(self):
+    self.sensor.stop()
+    self.sensor.destroy()
+
   @staticmethod
   def _Lidar_callback(weak_self, lidar_data):
     self = weak_self()

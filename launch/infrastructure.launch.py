@@ -26,29 +26,35 @@ def generate_launch_description():
   ############################################################
   ########################### CARLA ##########################
   ############################################################
-
+  sensor_params_yaml = PathJoinSubstitution([
+    FindPackageShare('carla_infrastructure'), 'config/infrastructure_params.yaml'
+  ])
   # Carla ROS bridge and infrastrucutre simulation
-  carla_infrastructure_node_launch = GroupAction(
+  infrastructure_control_launch = GroupAction(
     actions = [
       PushRosNamespace(namespace),
       IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
           PathJoinSubstitution([
-            FindPackageShare('carla_infrastructure'), 'launch', 'carla_infrastructure.launch.py'
+            FindPackageShare('infrastructure_launch'), 'launch/simulation', 'carla_infrastructure.launch.py'
             ])
           ]),
           launch_arguments = {
             # Launch parameters
             'carla_world' : global_params.get('hd_map', 'Town10_Opt'),
-            'sync' : '',                        # '--sync' or ''
+            'sync' : '--sync',                  # '--sync' or ''
             'standalone' : '--standalone',      # '--standalone' or ''
             'render' : '--render',  # '--no-render' or '--render',
-            'geo' : global_params.get('geo_projection',
-              '+proj=tmerc +lat_0=40.354550084445 +lon_0=-3.7463664011244586 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +geoidgrids=egm96_15.gtx +vunits=m +no_defs'),
+            'enable_tm' : '', # '--enable-tm' (Traffic Manager) or ''
+            'enable_tfr' : '',# '--enable-tfr' (Traffic Light Manager) or '',
+            'image_transport_on' : 'true',
+            'sensor_params_path' : sensor_params_yaml,
+            'target_fps' : str(global_params.get('target_fps', 60.0)),
             # Global parameters from yaml
             'global_frame_id' : global_params.get('map_frame', 'world'),
             'quit_simulation_topic' : global_params.get('quit_simulation_topic', 'quit_simulation'),
-            'ground_truth_topic' : global_params.get('ground_truth_topic', 'ground_truth'),
+            'infrastructure_perception_event_topic' : global_params.get('perception_event_topic', 'infrastructure_perception_event'),
+            'infrastructure_traffic_lights_topic' : global_params.get('traffic_lights_topic', 'infrastructure_traffic_lights_info'),
           }.items()
       )
     ]
@@ -73,19 +79,8 @@ def generate_launch_description():
     ]
   )
 
-  config_fps = TimerAction(
-    period = 6.0,
-    actions = [
-      ExecuteProcess(
-        cmd=[["python3 ~/Carla/PythonAPI/util/config.py --fps 60.0"]],
-        shell=True
-        )
-    ]
-  )
-
   return LaunchDescription([
     namespace_arg,
-    carla_infrastructure_node_launch,
-    config_fps,
+    infrastructure_control_launch,
     rviz_node
   ])

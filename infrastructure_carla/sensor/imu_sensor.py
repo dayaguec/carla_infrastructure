@@ -22,6 +22,10 @@ class IMUSensor(object):
     self.sensor.listen(
       lambda sensor_data: IMUSensor._IMU_callback(weak_self, sensor_data))
 
+  def destroy(self):
+    self.sensor.stop()
+    self.sensor.destroy()
+
   @staticmethod
   def _IMU_callback(weak_self, sensor_data):
     self = weak_self()

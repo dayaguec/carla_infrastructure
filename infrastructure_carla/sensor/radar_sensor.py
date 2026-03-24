@@ -42,6 +42,10 @@ class RadarSensor(object):
     self.sensor.listen(
         lambda radar_data: RadarSensor._Radar_callback(weak_self, radar_data))
 
+  def destroy(self):
+    self.sensor.stop()
+    self.sensor.destroy()
+
   @staticmethod
   def _Radar_callback(weak_self, radar_data):
     self = weak_self()

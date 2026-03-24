@@ -24,6 +24,10 @@ class GnssSensor(object):
     weak_self = weakref.ref(self)
     self.sensor.listen(lambda event: GnssSensor._on_gnss_event(weak_self, event))
 
+  def destroy(self):
+    self.sensor.stop()
+    self.sensor.destroy()
+
   @staticmethod
   def _on_gnss_event(weak_self, event):
     self = weak_self()

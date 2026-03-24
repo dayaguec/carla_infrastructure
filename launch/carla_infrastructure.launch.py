@@ -7,6 +7,7 @@ from launch.events import Shutdown
 from launch.event_handlers import OnProcessExit
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_path
+from launch.conditions import IfCondition
 
 def generate_launch_description():
   host = LaunchConfiguration('host')
@@ -18,6 +19,9 @@ def generate_launch_description():
   timeout = LaunchConfiguration('timeout') 
   timeout_arg = DeclareLaunchArgument(name='timeout', default_value=TextSubstitution(text='20.0'),
     description='Time to wait for Carla server response to the client')
+  target_fps = LaunchConfiguration('target_fps') 
+  target_fps_arg = DeclareLaunchArgument(name='target_fps', default_value=TextSubstitution(text='60.0'),
+    description='Target FPS for the simulation')
   carla_world = LaunchConfiguration('carla_world') 
   carla_world_arg = DeclareLaunchArgument(name='carla_world', default_value=TextSubstitution(text='Town10_Opt'),
     description='Carla world to generate, available worlds: Town01, Town02, Town03, Town04, Town05, Town06 \
@@ -27,16 +31,22 @@ def generate_launch_description():
     description='Run Simulation on sync mode')
   standalone = LaunchConfiguration('standalone')
   standalone_arg = DeclareLaunchArgument(name='standalone', default_value='', choices=['--standalone', ''],
-    description='Run Simulation on sync mode')
+    description='Run Simulation standalone')
   render = LaunchConfiguration('render')
   render_arg = DeclareLaunchArgument(name='render', default_value='--render', choices=['--render', '--no-render'],
     description='Render graphics on Carla server side, this is overrided if a GPU sensor is spawned')
-  geo_projection = LaunchConfiguration('geo_projection') 
-  geo_projection_arg = DeclareLaunchArgument(name='geo_projection',
-    default_value=TextSubstitution(text='+proj=tmerc +lat_0=40.354550084445 +lon_0=-3.7463664011244586 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +geoidgrids=egm96_15.gtx +vunits=m +no_defs'),
-    description='Geo projection for the GPS fix conversion')
   sensor_params_path = LaunchConfiguration('sensor_params_path',
     default=(get_package_share_path('carla_infrastructure') / 'config/infrastructure_params.yaml'))
+  enable_tm = LaunchConfiguration('enable_tm')
+  enable_tm_arg = DeclareLaunchArgument(name='enable_tm', default_value='', choices=['--enable-tm', ''],
+    description='Run Simulation with Traffic Manager')
+  enable_tfr = LaunchConfiguration('enable_tfr')
+  enable_tfr_arg = DeclareLaunchArgument(name='enable_tfr', default_value='', choices=['--enable-tfr', ''],
+    description='Run Simulation with Traffic Lights Manager')
+  image_transport_on = LaunchConfiguration('image_transport_on') 
+  image_transport_on_arg = DeclareLaunchArgument(name='image_transport_on', default_value='true',
+    choices=['true', 'false'],
+    description='Enable Image Transport for RGB Images')
 
   # Global parameters from top level launch
   quit_simulation_topic = LaunchConfiguration('quit_simulation_topic', default='quit_simulation')
@@ -50,7 +60,7 @@ def generate_launch_description():
     name='infrastructure_node',
     output='screen',
     arguments=['--host', host, '--port', port, '--timeout', timeout,
-      '--world', carla_world, '--geo', geo_projection, sync, standalone, render],
+      '--world', carla_world, '--fps', target_fps, sync, standalone, render, enable_tm, enable_tfr],
     parameters=[
       {'quit_simulation_topic': quit_simulation_topic},
       {'ground_truth_topic': ground_truth_topic},
@@ -63,6 +73,7 @@ def generate_launch_description():
     package='carla_infrastructure',
     executable='image_transport_node',
     name='image_transport_node',
+    condition=IfCondition(image_transport_on),
     output='screen',
     parameters=[
       # Private params
@@ -87,9 +98,12 @@ def generate_launch_description():
     host_arg,
     port_arg,
     timeout_arg,
+    target_fps_arg,
     carla_world_arg,
-    geo_projection_arg,
+    enable_tm_arg,
+    enable_tfr_arg,
     sync_arg,
+    image_transport_on_arg,
     standalone_arg,
     render_arg,
     infrastructure_node,

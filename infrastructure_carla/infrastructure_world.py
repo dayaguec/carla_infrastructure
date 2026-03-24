@@ -1,21 +1,27 @@
-from .localization.geo_converter import GeoConverter
-
 from .sensor.gnss_sensor import GnssSensor
 from .sensor.lidar_sensor import LidarSensor
 from .sensor.semantic_lidar_sensor import SemanticLidarSensor
 from .sensor.rgb_camera_sensor import RGBCameraSensor
 from .sensor.semantic_camera_sensor import SemanticCameraSensor
+from .sensor.rsu_sensor import RSUSensor
 
-from carla_infrastructure.msg import (Detection, ClassType, BoundingBox3D)
-from geometry_msgs.msg import (Pose, Point, Quaternion, Vector3)
+from .localization.transform import carla_transform_to_ros_pose
 
-import carla
-import random
+from perception_interfaces.msg import (GroundTruthDetection, ClassType)
+from geometry_msgs.msg import Vector3
+
+from infrastructure_carla.utils import find_weather_presets
+
 import numpy as np
-import pygame
-import time
+from dataclasses import dataclass
+import carla
 
-from tf_transformations import quaternion_from_euler
+@dataclass
+class VehicleProfile:
+  """Stores static data that doesn't change during the simulation."""
+  extent: carla.Vector3D
+  speed: carla.Vector3D
+  type_id: str
 
 class InfrastructureWorld(object):
   def __init__(self, carla_world, args):
@@ -30,14 +36,30 @@ class InfrastructureWorld(object):
       print('  Make sure it exists, has the same name of your town, and is correct.')
       sys.exit(1)
     self.gnss_sensors = None
-    self.imu_sensors = None
     self.lidar_sensors = None
     self.sem_lidar_sensors = None
-    self.radar_sensors = None
     self.rgb_camera_sensors = None
     self.sem_camera_sensors = None
-    # For Geolocation to Local coordinates from Carla Infrastructure World
-    self.geo_converter = GeoConverter(args.geo, 0.0)
+    self.rsu_sensors = None
+
+    self._weather_presets = find_weather_presets()
+    self._map_layers = [
+      carla.MapLayer.NONE,
+      carla.MapLayer.Buildings,
+      carla.MapLayer.Decals,
+      carla.MapLayer.Foliage,
+      carla.MapLayer.Ground,
+      carla.MapLayer.ParkedVehicles,
+      carla.MapLayer.Particles,
+      carla.MapLayer.Props,
+      carla.MapLayer.StreetLights,
+      carla.MapLayer.Walls,
+      carla.MapLayer.All
+    ]
+    self._loaded_map_layers = set(self._map_layers)
+
+    self._near_vehicles_cache = {}
+    self._vehicle_id_list = []
 
     if self.sync:
       self.world.tick()
@@ -56,6 +78,8 @@ class InfrastructureWorld(object):
       zip(sensor_params["lidar"][0], sensor_params["lidar"][1])]
     self.sem_lidar_sensors = [SemanticLidarSensor(self.world, tf_item, param_item) for tf_item, param_item in \
       zip(sensor_params["semantic_lidar"][0], sensor_params["semantic_lidar"][1])]
+    self.rsu_sensors = [RSUSensor(self.world, tf_item, param_item) for tf_item, param_item in \
+      zip(sensor_params["rsu"][0], sensor_params["rsu"][1])]
 
   def get_class(self, actor_id):
     """Get the detection Class given an Carla actor_id."""
@@ -79,38 +103,111 @@ class InfrastructureWorld(object):
     else:
       return ClassType.VEHICLE, ClassType.CAR
 
-  def get_near_player_vehicles(self, detection_msg, actor, max_distance=50):
-    """Return as a Detection msg the set of nearest vehicles within a distance
-       from the actor."""
+  def update_vehicle_cache(self):
+    """Low-frequency RPC call to get all vehicle in the map."""
     vehicles = self.world.get_actors().filter('vehicle.*')
-    t = actor.get_transform()
+    current_ids = [v.id for v in vehicles]
 
-    distance = lambda l: np.sqrt((l.x - t.location.x)**2 + (l.y - t.location.y)**2 + (l.z - t.location.z)**2)
-    vehicles = [(distance(x.get_location()), x) for x in vehicles if x.id != actor.id]
-    for d, vehicle in sorted(vehicles, key=lambda vehicles: vehicles[0]):
-      if d > max_distance:
-        break
-      transform = vehicle.get_transform()
-      vehicle_geolocation = self.map.transform_to_geolocation(transform.location)
-      enu_location = self.geo_converter.toENU(vehicle_geolocation)
-      yaw = -np.radians(transform.rotation.yaw)
-      v = vehicle.get_velocity()
+    # Clean up bbox cache for vehicles that no longer exist
+    self._near_vehicles_cache = {id: profile for id, profile in self._near_vehicles_cache.items() if id in current_ids}
 
-      detection = Detection()
-      detection.id = vehicle.id
-      detection.velocity = Vector3(x=v.x, y=v.y, z=v.z)
-      v_ype, v_class = self.get_class(vehicle.type_id)
-      detection.type = ClassType(type=v_ype, class_detection=v_class)
-      quat = quaternion_from_euler(0.0, 0.0, yaw)
-      detection.bounding_box.center = Pose(
-        position=Point(x=enu_location.position.x, y=enu_location.position.y, z=0.0),
-        orientation=Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3]))
-      detection.bounding_box.size = Vector3(
-        x=vehicle.bounding_box.extent.x * 2.0,
-        y=vehicle.bounding_box.extent.y * 2.0,
-        z=vehicle.bounding_box.extent.z * 2.0)
+    # Add new vehicles to the cache
+    for v in vehicles:
+      if v.id not in self._near_vehicles_cache:
+        self._near_vehicles_cache[v.id] = VehicleProfile(
+          extent=v.bounding_box.extent,
+          speed=v.get_velocity(),
+          type_id=v.type_id
+        )
 
-      detection_msg.detections.append(detection)
+    self._vehicle_id_list = current_ids
+
+  def get_nearby_vehicles(self, detection_msg, target_location, radius, snapshot):
+    """
+    High-frequency, ZERO-RPC call. 
+    Calculates nearby vehicles using local snapshot memory.
+    
+    :param target_location: carla.Location (the custom point to check from)
+    :param radius: float (search radius in meters)
+    :param snapshot: carla.WorldSnapshot (from world.get_snapshot())
+    :return: list of actor IDs within the radius
+    """
+    radius_sq = radius ** 2  # Squared radius for faster math
+
+    for actor_id in self._vehicle_id_list:
+      # Fetch the actor's state directly from the local snapshot
+      actor_snapshot = snapshot.find(actor_id)
+      
+      # If it returns None, the vehicle was destroyed since our last cache update
+      if actor_snapshot is None:
+        continue 
+
+      transform = actor_snapshot.get_transform()
+      loc = transform.location
+
+      dist_sq = (loc.x - target_location.x)**2 + (loc.y - target_location.y)**2
+
+      if dist_sq <= radius_sq:
+        profile = self._near_vehicles_cache.get(actor_id)
+        if not profile:
+          continue
+
+        detection = GroundTruthDetection()
+        detection.id = actor_id
+        detection.velocity = Vector3(x=profile.speed.x, y=profile.speed.y, z=profile.speed.z)
+        v_ype, v_class = self.get_class(profile.type_id)
+        detection.type = ClassType(type=v_ype, class_detection=v_class)
+        detection.bounding_box.center.pose = carla_transform_to_ros_pose(transform)
+        detection.bounding_box.center.covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        detection.bounding_box.size = Vector3(
+          x=profile.extent.x * 2.0,
+          y=profile.extent.y * 2.0,
+          z=profile.extent.z * 2.0)
+
+        detection_msg.detections.append(detection)
+
+  def change_wheather(self, weather_index):
+    """Query Carla World to change current weather with a preset."""
+    try:
+      preset = self._weather_presets[weather_index]
+    except IndexError:
+      return False, "Weather not recognized, out of bounds!"
+
+    if self.world.get_weather() != preset[0]:
+      self.world.set_weather(preset[0])
+      return True, "Weather changed succesfully!"
+    return False, "Unable to change Weather, already in that preset!"
+
+  def change_map_layer(self, layer_index, load=True):
+    """Query Carla World to load/unload the current map layer in the simulation."""
+    map_name = self.world.get_map().name
+    if "_Opt" in map_name: # Only available in layered maps
+      try:
+        target_layer = self._map_layers[layer_index]
+      except IndexError:
+        return False, "Layer not recognized, out of bounds!"
+
+      if load:
+        if target_layer in self._loaded_map_layers:
+          return True, "Layer {} already loaded. Skipping.".format(target_layer)
+        else:
+          self.world.load_map_layer(target_layer)
+          self._loaded_map_layers.add(target_layer)
+          return True, "Successfully loaded {}.".format(target_layer)
+      else:
+        if target_layer not in self._loaded_map_layers:
+          return True, "Layer {} already unloaded. Skipping.".format(target_layer)
+        else:
+          self.world.unload_map_layer(target_layer)
+          self._loaded_map_layers.discard(target_layer)
+          return True, "Successfully unloaded {}.".format(target_layer)
+
+    return False, "Unable to load Layer, map is not layered!"
 
   def get_traffic_lights(self, tl_list, actor, max_distance=50):
     """Return as a Light msg the set of nearest traffic lights within a distance
@@ -132,16 +229,13 @@ class InfrastructureWorld(object):
     # Destroy all world items
     sensor_lists = [
       self.gnss_sensors,
-      self.imu_sensors,
+      self.rsu_sensors,
       self.lidar_sensors,
       self.sem_lidar_sensors,
-      self.radar_sensors,
       self.rgb_camera_sensors,
       self.sem_camera_sensors
     ]
     for sensor_list in sensor_lists:
       if sensor_list is not None:
-        for ss in sensor_list:
-          if ss.sensor is not None:
-            ss.sensor.stop()
-            ss.sensor.destroy()
+        for sensor in sensor_list:
+            sensor.destroy()

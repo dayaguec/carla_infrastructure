@@ -56,6 +56,10 @@ class SemanticCameraSensor(object):
   def get_camera_info(self):
     return self._camera_info
 
+  def destroy(self):
+    self.sensor.stop()
+    self.sensor.destroy()
+
   @staticmethod
   def _RGB_callback(weak_self, sensor_data):
     self = weak_self()

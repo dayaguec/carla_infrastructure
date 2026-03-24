@@ -1,12 +1,12 @@
 ############## Rviz ##############
 quit_simulation_topic: "quit_simulation"
 ############## Sensors ##############
-geo_projection: "+proj=tmerc +lat_0=40.354550084445 +lon_0=-3.7463664011244586 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +geoidgrids=egm96_15.gtx +vunits=m +no_defs"
 ground_truth_topic: "ground_truth"
 infrastructure_gps_topic: "gps/fix"
+infrastructure_cams_topic: "rsu/data"
 ############## Map ##############
 hd_map: "Town10HD_Opt"
-
+target_fps: 60.0 # This is for the client in synch mode.
 # Tf transformation tree frames
 map_frame: "map"
 

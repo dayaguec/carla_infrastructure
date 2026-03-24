@@ -2,10 +2,11 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>carla_infrastructure</name>
-  <version>0.0.1</version>
-  <description>ROS Package to bidge with Carla simulator and generate synthetic data</description>
+  <version>1.0.0</version>
+  <description>ROS Package to bidge with Carla simulator and generate synthetic data from the infrastructure</description>
+  <author email="dayaguec@inf.uc3m.es">David Yagüe-Cuevas</author>
   <maintainer email="dayaguec@inf.uc3m.es">David Yague-Cuevas</maintainer>
-  <license>TODO</license>
+  <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
@@ -14,20 +15,14 @@
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>cooperation_interfaces</depend>
+  <depend>carla_interfaces</depend>
   <depend>visualization_msgs</depend>
+  <depend>perception_interfaces</depend>
   <depend>image_transport</depend>
   <depend>sensor_msgs</depend>
   <depend>yaml-cpp</depend>
   
-  <exec_depend>rosidl_default_runtime</exec_depend>
-
-  <test_depend>ament_lint_common</test_depend>
-
-  <member_of_group>rosidl_interface_packages</member_of_group>
-
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
-
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

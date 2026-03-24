@@ -7,28 +7,17 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(cooperation_interfaces REQUIRED)
+find_package(carla_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(image_transport REQUIRED)
-
-set(msg_files
-  "msg/BoundingBox3D.msg"
-  "msg/ClassType.msg"
-  "msg/Detection.msg"
-  "msg/Perception.msg"
-)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  ${msg_files}
-  DEPENDENCIES geometry_msgs std_msgs
-  ADD_LINTER_TESTS
-)
+find_package(perception_interfaces REQUIRED)
 
 include_directories(
   include
