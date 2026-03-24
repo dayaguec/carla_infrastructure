@@ -27,7 +27,7 @@ add_executable(image_transport_node src/image_transport_node.cpp)
 ament_target_dependencies(image_transport_node rclcpp image_transport yaml-cpp sensor_msgs)
 target_link_libraries(image_transport_node ${YAML_CPP_LIBRARIES})
 
-ament_python_install_package(infrastructure_carla)
+ament_python_install_package(carla_infrastructure)
 
 # Install Python executables
 install(PROGRAMS

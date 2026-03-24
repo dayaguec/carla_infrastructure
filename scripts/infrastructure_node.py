@@ -13,8 +13,8 @@ import argparse
 import rclpy
 import time
 
-from infrastructure_carla.infrastructure_ros_bridge import InfrastructureROSBridge
-from infrastructure_carla.infrastructure_world import InfrastructureWorld
+from carla_infrastructure.infrastructure_ros_bridge import InfrastructureROSBridge
+from carla_infrastructure.infrastructure_world import InfrastructureWorld
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -66,12 +66,12 @@ def game_loop(args, ros_args):
     ros_bridge = InfrastructureROSBridge(world, sync_opt, args.standalone)
     
     if args.enable_tm and args.standalone:
-      from infrastructure_carla.management.carla_traffic_manager import CarlaTrafficManager
+      from carla_infrastructure.management.carla_traffic_manager import CarlaTrafficManager
       traffic_manager = CarlaTrafficManager(client=client, tm_port=args.tm_port)
       ros_bridge.set_traffic_manager(traffic_manager)
 
     if args.enable_tfr and args.standalone:
-      from infrastructure_carla.management.traffic_light_manager import TrafficLightManager
+      from carla_infrastructure.management.traffic_light_manager import TrafficLightManager
       traffic_light_manager = TrafficLightManager(world)
 
     if args.standalone:

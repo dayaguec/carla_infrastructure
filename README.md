@@ -11,7 +11,7 @@ The package contains a folder named **_msg_** with the following ROS interfaces 
 
 # Sensors
 
-Every sensor class that can be instantiated to deploy in simulation is inside the folder **_infrastructure_carla_**. Each class contains a callback for the readings that come from Carla server and a method to convert those to ROS Messages. The available sensors are:
+Every sensor class that can be instantiated to deploy in simulation is inside the folder **_carla_infrastructure_**. Each class contains a callback for the readings that come from Carla server and a method to convert those to ROS Messages. The available sensors are:
 1. **GNSS**: Produces [NavSatFix](https://docs.ros2.org/latest/api/sensor_msgs/msg/NavSatFix.html) ROS Messages.
 2. **IMU**: Produces [IMU](https://docs.ros2.org/foxy/api/sensor_msgs/msg/Imu.html) ROS messages.
 3. **LiDAR (Raycast)**: Produces [PointCloud2](https://docs.ros2.org/latest/api/sensor_msgs/msg/PointCloud.html) ROS messages.

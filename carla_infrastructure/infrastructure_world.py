@@ -10,7 +10,7 @@ from .localization.transform import carla_transform_to_ros_pose
 from perception_interfaces.msg import (GroundTruthDetection, ClassType)
 from geometry_msgs.msg import Vector3
 
-from infrastructure_carla.utils import find_weather_presets
+from carla_infrastructure.utils import find_weather_presets
 
 import numpy as np
 from dataclasses import dataclass
