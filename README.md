@@ -1,13 +1,21 @@
 
 # Carla Infrastructure
-Carla Infrastructure Simulation framework for the generation of custom synthetic data. This package allows to simulate any kind of sensor in Carla deployed in custom infrastructure positions. All sensors readings are converted to ROS Messages in order to generate custom bagfiles.
+Carla Infrastructure Simulation framework for the generation of custom synthetic data. This package allows to simulate any kind of sensor in Carla deployed in custom infrastructure positions. All sensors readings are converted to ROS Messages in order to generate custom bagfiles. This repository is meant to work with [Smart Infrastructure](https://github.com/dayaguec/smart_infrastructure).
+
+
+## Requirements
+
+* **OS:** Ubuntu 22.04 LTS
+* **ROS:** ROS2 Humble
+* **Dependencies:** Ensure all individual package dependencies are met.
 
 # ROS Messages
-The package contains a folder named **_msg_** with the following ROS interfaces to store sensor readings from Carla Server.
-1. **BoundingBox3D**: Msg defining a 3D bounding box.
-2. **ClassType**: Msg defining a class for detection systems. Vehicle, pedestrian, etc.
-3. **Detection**: Msg defining a 3D detection.
-4. **Perception**: Msgs defining a detection array.
+The package make us of custom ROS interfaces for the generation of sensor data.
+1. **carla_interfaces**: [Interfaces](https://github.com/lsiteam/carla_interfaces/) defining a Carla related information.
+2. **cooperation_interfaces**: [Interfaces](https://github.com/lsiteam/cooperation_interfaces) defining cooperative information.
+3. **perception_interfaces**: [Interfaces](https://github.com/lsiteam/perception_interfaces) defining perception detections.
+4. **planning_interfaces**: [Interfaces](https://github.com/lsiteam/planning_interfaces) defining planning relevant information.
+5. **vehicle interfaces**: [Interfaces](https://github.com/lsiteam/vehicle_interfaces) defining a vehicle control types.
 
 # Sensors
 
@@ -44,5 +52,3 @@ The package contains several tools:
 The package provides launch files to launch the bridge. Follow these steps to launch everything:
 1. Launch Carla with ``carla`` or ``carla_low``. Please, note this is a bash alias that execute Carla Binary launch script.
 2. Launch the Bridge with ``ros2 launch carla_infrastructure infrastructure.launch``. This will launch everything, including RVIZ, the visualization tool from ROS from which the ground truth and sensor readings can be seen.
-
-
